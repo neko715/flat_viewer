@@ -748,17 +748,24 @@
       }
 
       if (savedValue !== latestValue) {
-        // 値が変わっていた場合：先に最新値を保存してからリロード
-        // （こうすることで、リロード後の再チェック時には値が一致し、
-        //   無限リロードにならない）
-        localStorage.setItem(SHEET_WATCH_KEY, latestValue);
-        // alert()はOKボタンのみ（キャンセル不可）で、OKが押されるまで処理をブロックする
-        alert("楽譜が更新されたためページを再読み込みします");
+    // 無限リロード防止のため先に保存
+    localStorage.setItem(SHEET_WATCH_KEY, latestValue);
+
+    // モーダル表示
+    const modal = document.getElementById("reloadModal");
+    modal.style.display = "flex";
+
+    // OKボタンが押されたらリロード
+    document.getElementById("reloadOkBtn").onclick = () => {
+        modal.style.display = "none";
         location.reload();
-      }
-      // 値が同じ場合は何もしない
+    };
+}
+// 値が同じ場合は何もしない
     } catch (err) {
       console.error("スプレッドシートの監視中にエラーが発生しました:", err);
+      // ↓デバッグ用：原因が分かったら削除してOK
+      alert("スプレッドシート監視エラー: " + err.message);
     }
   }
 
@@ -767,5 +774,27 @@
   setInterval(checkSheetForUpdate, SHEET_WATCH_INTERVAL_MS);
 </script>
 
+<!-- 更新通知モーダル -->
+<div id="reloadModal" style="
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.5);
+  justify-content:center;
+  align-items:center;
+  z-index:9999;
+">
+  <div style="
+    background:#fff;
+    padding:20px;
+    border-radius:10px;
+    text-align:center;
+    min-width:300px;
+    box-shadow:0 4px 12px rgba(0,0,0,.3);
+  ">
+    <p>楽譜が更新されたためページを再読み込みします。</p>
+    <button id="reloadOkBtn">OK</button>
+  </div>
+</div>
 </body>
 </html>
