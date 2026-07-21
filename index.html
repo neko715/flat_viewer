@@ -707,6 +707,62 @@
   }
 
   fullscreenBtn.addEventListener("click", toggleFullscreen);
+
+  // ---------- Googleスプレッドシート監視による自動リロード ----------
+  // スプレッドシートID（共有URLから取得）
+  const SHEET_ID = "1tKJEYZJyCj7KOtDzKs_DR2VRbQHqFXFklH0Ksv7G9Q8";
+  // A1セルの値を localStorage に保存する際のキー
+  const SHEET_WATCH_KEY = "scoreLibrary_sheetA1Value";
+  // 監視間隔（ミリ秒）
+  const SHEET_WATCH_INTERVAL_MS = 5000;
+
+  // gvizエンドポイントを使い、A1セルのみをCSVとして取得する
+  // ※このスプレッドシートは「リンクを知っている全員が閲覧可」に共有されている必要があります
+  async function fetchSheetA1Value() {
+    const url =
+      `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq` +
+      `?tqx=out:csv&range=A1&_=${Date.now()}`; // キャッシュ回避用のダミーパラメータ
+
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) {
+      throw new Error(`スプレッドシートの取得に失敗しました (status: ${res.status})`);
+    }
+
+    const csvText = await res.text();
+    // gvizのCSV出力は "値" のようにダブルクォートで囲まれて返る
+    return csvText
+      .trim()
+      .replace(/^"|"$/g, "")
+      .replace(/""/g, '"');
+  }
+
+  async function checkSheetForUpdate() {
+    try {
+      const latestValue = await fetchSheetA1Value();
+      const savedValue = localStorage.getItem(SHEET_WATCH_KEY);
+
+      if (savedValue === null) {
+        // 初回実行：値を保存するのみで、リロードは行わない
+        localStorage.setItem(SHEET_WATCH_KEY, latestValue);
+        return;
+      }
+
+      if (savedValue !== latestValue) {
+        // 値が変わっていた場合：先に最新値を保存してからリロード
+        // （こうすることで、リロード後の再チェック時には値が一致し、
+        //   無限リロードにならない）
+        localStorage.setItem(SHEET_WATCH_KEY, latestValue);
+        location.reload();
+      }
+      // 値が同じ場合は何もしない
+    } catch (err) {
+      console.error("スプレッドシートの監視中にエラーが発生しました:", err);
+    }
+  }
+
+  // 初回実行 + 5秒ごとのポーリング
+  checkSheetForUpdate();
+  setInterval(checkSheetForUpdate, SHEET_WATCH_INTERVAL_MS);
 </script>
 
 </body>
