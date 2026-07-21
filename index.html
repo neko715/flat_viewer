@@ -334,12 +334,11 @@
 
   .score-body iframe {
     width: 100%;
+    height: 100%;
     border: none;
     border-radius: 10px;
     box-shadow: var(--shadow);
     display: block;
-    flex: 1 1 auto;
-    min-height: 300px;
   }
 
   /* 1つの譜面のみのときは画面いっぱいに */
@@ -349,7 +348,37 @@
   .score-body.single iframe {
     border-radius: 0;
     box-shadow: none;
-    height: 100%;
+  }
+
+  /* iframeを包むラッパー */
+  .iframe-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 300px;
+    display: flex;
+  }
+
+  .score-body.single .iframe-wrap {
+    min-height: 0;
+  }
+
+  /* Flatロゴ(左下)を覆い隠すマスク */
+  .logo-mask {
+    position: absolute;
+    left: 0px;
+    bottom: 0;
+    width: 110px;
+    height: 52px;
+    background: #1565EF;
+    border-bottom-left-radius: 10px;
+    z-index: 3;
+    transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1), border-radius 0.3s ease;
+  }
+
+  /* 開いた瞬間（全幅時）は角丸なしの四角形 */
+  .logo-mask.full-cover {
+    width: 100%;
+    border-radius: 0;
   }
 
   .part-label {
@@ -357,17 +386,6 @@
     font-weight: 700;
     color: var(--accent);
     padding: 0 4px;
-  }
-
-  .flat-credit {
-    font-size: 11px;
-    color: var(--accent);
-    padding: 0 4px;
-    font-family: Inter, "Helvetica Neue", Helvetica, Arial, sans-serif;
-  }
-  .flat-credit a {
-    color: var(--accent);
-    text-decoration: none;
   }
 </style>
 </head>
@@ -629,9 +647,23 @@
         label.textContent = part.label;
         scoreBody.appendChild(label);
       }
-      const wrapper = document.createElement("div");
-      wrapper.innerHTML = part.embed;
-      scoreBody.appendChild(wrapper.firstElementChild);
+
+      const wrap = document.createElement("div");
+      wrap.className = "iframe-wrap";
+
+      const temp = document.createElement("div");
+      temp.innerHTML = part.embed;
+      wrap.appendChild(temp.firstElementChild);
+
+      const mask = document.createElement("div");
+      mask.className = "logo-mask full-cover";
+      wrap.appendChild(mask);
+
+      setTimeout(() => {
+        mask.classList.remove("full-cover");
+      }, 1200);
+
+      scoreBody.appendChild(wrap);
     });
 
     menuScreen.style.display = "none";
@@ -639,17 +671,26 @@
     scoreBody.scrollTop = 0;
   }
 
+  // ★ 楽譜画面を閉じる時の処理（全画面解除を追加！）
   function closeScore() {
+    // もし全画面表示中なら解除する
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
+    }
+
     scoreScreen.style.display = "none";
     menuScreen.style.display = "flex";
     scoreBody.innerHTML = "";
   }
-  // 「戻る」ボタンは楽譜画面→曲一覧画面に戻る（categoryScreenはそのまま非表示）
 
   backBtn.addEventListener("click", closeScore);
 
   function toggleFullscreen() {
-    if (!document.fullscreenElement) {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
       const target = scoreScreen;
       if (target.requestFullscreen) {
         target.requestFullscreen();
