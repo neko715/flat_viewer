@@ -758,15 +758,14 @@
 
   fullscreenBtn.addEventListener("click", toggleFullscreen);
 
-  // ---------- 表示中の楽譜(PDF)を直接印刷 ----------
-  // Flat.io の iframe 自体は印刷せず、同一オリジンに置いてある
-  // <song.id>.pdf をブラウザのPDFビューアへ直接渡して印刷する。
+  // ---------- 表示中の楽譜(PDF)をPDF.jsの印刷機能で印刷 ----------
+  // PDFそのものを新しいタブで開くのではなく、自前の印刷用HTMLを
+  // Blob URLで開く。印刷用HTMLではPDF.jsのPrintServiceを使って
+  // PDFページをブラウザの印刷用キャンバスへ描画する。
   //
-  // これまでの
-  //   PDF → pdf.js → Canvas → PNG → 印刷
-  // ではなく、
-  //   PDF → ブラウザのPDFビューア → 印刷
-  // とすることで、楽譜のベクターデータをラスター化しない。
+  // 元ページ側はそのまま残るため、印刷用ウィンドウを閉じた後も
+  // ライブラリ側の状態を失わない。
+
   async function printScore() {
     if (!currentSong) return;
 
@@ -775,69 +774,34 @@
     setPrintButtonLoading(true);
 
     try {
-      // まずPDFが取得可能か確認する。
-      // HEADに対応していないサーバーもあるため、失敗時はGETで確認する。
-      let res;
-      try {
-        res = await fetch(pdfUrl, {
-          method: "HEAD",
-          cache: "no-store"
-        });
-      } catch {
-        res = null;
-      }
-
-      if (!res || !res.ok) {
-        res = await fetch(pdfUrl, {
-          method: "GET",
-          cache: "no-store"
-        });
-      }
-
-      if (!res.ok) {
-        throw new Error(`PDFを取得できませんでした (status: ${res.status})`);
-      }
-
-      // PDFそのものを新しいタブで開く。
-      // ブラウザ標準のPDFビューアがPDFをベクターのまま扱うため、
-      // Canvas/PNGへの変換による解像度劣化を避けられる。
-      const printWindow = window.open(pdfUrl, "_blank");
+      // 印刷用ウィンドウを先に開く。
+      // ユーザー操作直後にwindow.openすることで、ポップアップ
+      // ブロックを避けやすくする。
+      const printWindow = window.open("", "_blank", "width=1000,height=800");
 
       if (!printWindow) {
         throw new Error("ポップアップがブロックされました。");
       }
 
-      // ブラウザによってPDFビューアの読み込み完了を検知できる
-      // タイミングが異なるため、少し待ってから印刷を試みる。
-      //
-      // Chrome/Edge等ではPDFビューア側の print() が直接呼べない場合が
-      // あるため、失敗してもPDF自体は開いた状態を維持する。
-      const tryPrint = () => {
-        try {
-          printWindow.focus();
-          printWindow.print();
-        } catch (err) {
-          console.warn("PDFビューアの自動印刷を開始できませんでした:", err);
-        }
-      };
+      // 印刷用HTMLを作成
+      const printHtml = createPdfPrintHtml(pdfUrl, currentSong.title);
 
-      setTimeout(tryPrint, 1200);
+      printWindow.document.open();
+      printWindow.document.write(printHtml);
+      printWindow.document.close();
 
-      // PDFタブが閉じられたら、元の楽譜ライブラリ画面へ戻す。
-      // 「印刷ダイアログを閉じた」ではなく「PDFタブを閉じた」を検知する。
+      // 印刷用ウィンドウが閉じられたら、元ページをライブラリ画面へ戻す。
       const watchPrintWindow = setInterval(() => {
         if (printWindow.closed) {
           clearInterval(watchPrintWindow);
-
-          // 楽譜画面を閉じて曲一覧へ戻る
           closeScore();
         }
-      }, 500);
+      }, 300);
 
     } catch (err) {
-      console.error("PDFの印刷準備に失敗しました:", err);
+      console.error("PDF印刷の準備に失敗しました:", err);
       alert(
-        "楽譜PDFを開けませんでした。\n" +
+        "楽譜PDFの印刷準備に失敗しました。\n" +
         `対象ファイル: ${pdfUrl}\n` +
         `エラー: ${err.message}`
       );
@@ -849,6 +813,183 @@
   function setPrintButtonLoading(isLoading) {
     printBtn.disabled = isLoading;
     printBtn.classList.toggle("is-loading", isLoading);
+  }
+
+  // PDF.jsのPrintServiceを利用する専用HTMLを生成。
+  // viewer.htmlをそのまま使うのではなく、必要な処理だけを持つ
+  // 軽量な印刷用ページにしている。
+  function createPdfPrintHtml(pdfUrl, title) {
+    const escapedUrl = JSON.stringify(pdfUrl);
+    const escapedTitle = escapeHtml(title);
+
+    return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>${escapedTitle}</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"><\/script>
+
+<style>
+  @page {
+    margin: 0;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    background: #fff;
+  }
+
+  #status {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: sans-serif;
+    font-size: 16px;
+    background: #fff;
+    z-index: 100;
+  }
+
+  #print-container {
+    position: absolute;
+    left: -100000px;
+    top: 0;
+  }
+
+  .page {
+    position: relative;
+    overflow: hidden;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .page canvas {
+    display: block;
+  }
+
+  @media print {
+    #status {
+      display: none !important;
+    }
+
+    #print-container {
+      position: static;
+      left: auto;
+    }
+
+    .page {
+      width: 100%;
+      height: auto;
+    }
+
+    .page canvas {
+      width: 100%;
+      height: auto;
+    }
+  }
+</style>
+</head>
+
+<body>
+<div id="status">印刷用に楽譜を準備しています…</div>
+<div id="print-container"></div>
+
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+  const PDF_URL = ${escapedUrl};
+  const container = document.getElementById("print-container");
+  const status = document.getElementById("status");
+
+  async function prepareAndPrint() {
+    try {
+      const loadingTask = pdfjsLib.getDocument(PDF_URL);
+      const pdf = await loadingTask.promise;
+
+      // PDF.jsの印刷品質を確保するため、CSS上の印刷サイズに対して
+      // 高密度でCanvasを作る。
+      //
+      // これは画面表示用ではなく「PDF.jsの印刷用Canvas」なので、
+      // 元PDFのベクター情報をブラウザ印刷用に高密度でラスタライズする。
+      const PRINT_DPI = 300;
+      const CSS_DPI = 96;
+      const PRINT_SCALE = PRINT_DPI / CSS_DPI;
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+
+        const viewport = page.getViewport({ scale: PRINT_SCALE });
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "page";
+
+        // 実際のPDFページサイズをCSSインチへ変換。
+        const widthIn = page.view[2] / 72;
+        const heightIn = page.view[3] / 72;
+
+        wrapper.style.width = widthIn + "in";
+        wrapper.style.height = heightIn + "in";
+
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+
+        // 印刷時にはCSSサイズをPDF本来のページサイズにする。
+        canvas.style.width = widthIn + "in";
+        canvas.style.height = heightIn + "in";
+
+        const ctx = canvas.getContext("2d", {
+          alpha: false
+        });
+
+        wrapper.appendChild(canvas);
+        container.appendChild(wrapper);
+
+        await page.render({
+          canvasContext: ctx,
+          viewport: viewport
+        }).promise;
+      }
+
+      status.textContent = "印刷ダイアログを開いています…";
+
+      // すべてのページの描画が終わってから印刷。
+      await new Promise(resolve => requestAnimationFrame(() => {
+        requestAnimationFrame(resolve);
+      }));
+
+      window.focus();
+      window.print();
+
+    } catch (err) {
+      console.error(err);
+      status.textContent = "印刷の準備に失敗しました。";
+      alert(
+        "PDFの印刷準備に失敗しました。\\n" +
+        err.message
+      );
+    }
+  }
+
+  // 印刷ダイアログ終了後、この印刷用ウィンドウを閉じる。
+  window.onafterprint = () => {
+    setTimeout(() => window.close(), 100);
+  };
+
+  window.addEventListener("load", prepareAndPrint);
+<\/script>
+</body>
+</html>`;
   }
 
   printBtn.addEventListener("click", printScore);
