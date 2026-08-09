@@ -823,6 +823,17 @@
 
       setTimeout(tryPrint, 1200);
 
+      // PDFタブが閉じられたら、元の楽譜ライブラリ画面へ戻す。
+      // 「印刷ダイアログを閉じた」ではなく「PDFタブを閉じた」を検知する。
+      const watchPrintWindow = setInterval(() => {
+        if (printWindow.closed) {
+          clearInterval(watchPrintWindow);
+
+          // 楽譜画面を閉じて曲一覧へ戻る
+          closeScore();
+        }
+      }, 500);
+
     } catch (err) {
       console.error("PDFの印刷準備に失敗しました:", err);
       alert(
