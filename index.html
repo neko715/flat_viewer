@@ -485,12 +485,7 @@
 </div>
 
 <!-- pdf.js（同一オリジンのPDFをcanvasに描画して印刷するために使用） -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-
 <script>
-  // pdf.js の Worker を設定
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
   // 曲データ
   const songs = [
@@ -763,46 +758,75 @@
 
   fullscreenBtn.addEventListener("click", toggleFullscreen);
 
-  // ---------- 表示中の楽譜(PDF)を印刷 ----------
-  // flat.io の埋め込みiframeはクロスオリジンで印刷できないため、
-  // 表示中の曲に対応するPDF（同一オリジン、 <song.id>.pdf ）を
-  // pdf.js でcanvasに描画し、別ウィンドウを開いて印刷する。
+  // ---------- 表示中の楽譜(PDF)を直接印刷 ----------
+  // Flat.io の iframe 自体は印刷せず、同一オリジンに置いてある
+  // <song.id>.pdf をブラウザのPDFビューアへ直接渡して印刷する。
+  //
+  // これまでの
+  //   PDF → pdf.js → Canvas → PNG → 印刷
+  // ではなく、
+  //   PDF → ブラウザのPDFビューア → 印刷
+  // とすることで、楽譜のベクターデータをラスター化しない。
   async function printScore() {
     if (!currentSong) return;
 
     const pdfUrl = `${currentSong.id}.pdf`;
 
     setPrintButtonLoading(true);
+
     try {
-      const loadingTask = pdfjsLib.getDocument(pdfUrl);
-      const pdf = await loadingTask.promise;
+      // まずPDFが取得可能か確認する。
+      // HEADに対応していないサーバーもあるため、失敗時はGETで確認する。
+      let res;
+      try {
+        res = await fetch(pdfUrl, {
+          method: "HEAD",
+          cache: "no-store"
+        });
+      } catch {
+        res = null;
+      }
 
-      // 印刷用に高解像度でレンダリング
-      const PRINT_SCALE = 2;
-      const pageImages = [];
-
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-        const page = await pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: PRINT_SCALE });
-
-        const canvas = document.createElement("canvas");
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const ctx = canvas.getContext("2d");
-
-        await page.render({ canvasContext: ctx, viewport }).promise;
-        pageImages.push({
-          dataUrl: canvas.toDataURL("image/png"),
-          width: viewport.width,
-          height: viewport.height
+      if (!res || !res.ok) {
+        res = await fetch(pdfUrl, {
+          method: "GET",
+          cache: "no-store"
         });
       }
 
-      openPrintWindow(pageImages, currentSong.title);
+      if (!res.ok) {
+        throw new Error(`PDFを取得できませんでした (status: ${res.status})`);
+      }
+
+      // PDFそのものを新しいタブで開く。
+      // ブラウザ標準のPDFビューアがPDFをベクターのまま扱うため、
+      // Canvas/PNGへの変換による解像度劣化を避けられる。
+      const printWindow = window.open(pdfUrl, "_blank");
+
+      if (!printWindow) {
+        throw new Error("ポップアップがブロックされました。");
+      }
+
+      // ブラウザによってPDFビューアの読み込み完了を検知できる
+      // タイミングが異なるため、少し待ってから印刷を試みる。
+      //
+      // Chrome/Edge等ではPDFビューア側の print() が直接呼べない場合が
+      // あるため、失敗してもPDF自体は開いた状態を維持する。
+      const tryPrint = () => {
+        try {
+          printWindow.focus();
+          printWindow.print();
+        } catch (err) {
+          console.warn("PDFビューアの自動印刷を開始できませんでした:", err);
+        }
+      };
+
+      setTimeout(tryPrint, 1200);
+
     } catch (err) {
       console.error("PDFの印刷準備に失敗しました:", err);
       alert(
-        "楽譜PDFの印刷準備に失敗しました。\n" +
+        "楽譜PDFを開けませんでした。\n" +
         `対象ファイル: ${pdfUrl}\n` +
         `エラー: ${err.message}`
       );
@@ -814,86 +838,6 @@
   function setPrintButtonLoading(isLoading) {
     printBtn.disabled = isLoading;
     printBtn.classList.toggle("is-loading", isLoading);
-  }
-
-  // レンダリング済みページ画像を新規ウィンドウに並べて印刷する
-  function openPrintWindow(pageImages, title) {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      alert("ポップアップがブロックされました。ブラウザの設定でポップアップを許可してください。");
-      return;
-    }
-
-    // インラインで幅・高さを両方pxで固定すると、印刷時に幅だけが
-    // ページ幅へ縮小されて縦横比が崩れるため、画像側には指定を持たせず
-    // 幅100%・高さautoのCSSだけで元のアスペクト比を保つようにする。
-    const imagesHtml = pageImages
-      .map(img => `<img src="${img.dataUrl}" alt="page">`)
-      .join("\n");
-
-    printWindow.document.open();
-    printWindow.document.write(`<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<title>${escapeHtml(title)}</title>
-<style>
-  @page { margin: 0; }
-  html, body { margin: 0; padding: 0; }
-  img {
-    display: block;
-    width: 100%;
-    height: auto;
-    page-break-after: always;
-    page-break-inside: avoid;
-  }
-  img:last-child { page-break-after: auto; }
-</style>
-</head>
-<body>
-${imagesHtml}
-</body>
-</html>`);
-    printWindow.document.close();
-
-    // 印刷ダイアログが閉じた（印刷 or キャンセル）タイミングでウィンドウを自動で閉じる
-    printWindow.onafterprint = () => {
-      printWindow.close();
-    };
-
-    // 画像の読み込みを待ってから印刷ダイアログを開く
-    const imgs = printWindow.document.images;
-    let loaded = 0;
-    const total = imgs.length;
-
-    if (total === 0) {
-      printWindow.focus();
-      printWindow.print();
-      return;
-    }
-
-    Array.from(imgs).forEach(img => {
-      if (img.complete) {
-        onImgReady();
-      } else {
-        img.addEventListener("load", onImgReady);
-        img.addEventListener("error", onImgReady);
-      }
-    });
-
-    function onImgReady() {
-      loaded++;
-      if (loaded >= total) {
-        printWindow.focus();
-        printWindow.print();
-      }
-    }
-  }
-
-  function escapeHtml(str) {
-    const div = document.createElement("div");
-    div.textContent = str;
-    return div.innerHTML;
   }
 
   printBtn.addEventListener("click", printScore);
