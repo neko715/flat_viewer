@@ -383,6 +383,20 @@
     box-shadow: none;
   }
 
+  /* 曲ごとの注意書き */
+  .score-notice {
+    flex-shrink: 0;
+    margin: 10px 12px 0;
+    padding: 11px 14px;
+    border: 1px solid #f3d28d;
+    border-radius: 10px;
+    background: #fff9e9;
+    color: #79510a;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.6;
+  }
+
   /* iframeを包むラッパー */
   .iframe-wrap {
     position: relative;
@@ -543,6 +557,15 @@
       ]
     },
     {
+      id: "spanishdance1",
+      title: "スペイン舞曲No.1",
+      category: "concert",
+      notice: "この楽譜のリズムは調整中です。実際とは異なる部分がある可能性があります。",
+      parts: [
+        { label: null, embed: `<iframe src="https://flat.io/embed/6922c989522636ce2f2c165d?_l=true&sharingKey=a7610ebd4e42efe0b0c505c2999b8bc9f69b8abc95c047252b5a94feeb7c06aa2977388a83081444a0c697b64ca8a85676e82cbe089a9cef899a351834dc35b5&layout=page&parts=03981588-666d-8373-a54a-838184d0ba8f" height="480" width="100%" frameBorder="0" allowfullscreen allow="autoplay; midi"></iframe>` }
+      ]
+    },
+    {
       id: "spanishcoffee",
       title: "スパニッシュコーヒー",
       category: "concert",
@@ -685,6 +708,14 @@
     scoreTitle.textContent = song.title;
     scoreBody.innerHTML = "";
     scoreBody.classList.toggle("single", song.parts.length === 1);
+
+    if (song.notice) {
+      const notice = document.createElement("div");
+      notice.className = "score-notice";
+      notice.setAttribute("role", "note");
+      notice.textContent = song.notice;
+      scoreBody.appendChild(notice);
+    }
 
     song.parts.forEach(part => {
       if (part.label) {
