@@ -395,6 +395,12 @@
     font-size: 13px;
     font-weight: 600;
     line-height: 1.6;
+    animation: scoreNoticeFadeOut 5s ease-in forwards;
+  }
+
+  @keyframes scoreNoticeFadeOut {
+    0%, 90% { opacity: 1; }
+    100% { opacity: 0; }
   }
 
   /* iframeを包むラッパー */
@@ -715,6 +721,8 @@
       notice.setAttribute("role", "note");
       notice.textContent = song.notice;
       scoreBody.appendChild(notice);
+      // 5秒後に注意書きを取り除き、楽譜の表示領域を元に戻す
+      setTimeout(() => notice.remove(), 5000);
     }
 
     song.parts.forEach(part => {
