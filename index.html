@@ -523,7 +523,7 @@
     </div>
     <div class="section-switch">
       <span class="section-name" id="section-name">プライム</span>
-      <button class="section-switch-btn" id="section-switch-btn">コントラバス&gt;</button>
+      <button class="section-switch-btn" id="section-switch-btn">コントラバスへ移動</button>
     </div>
     <div class="category-grid" id="category-grid"></div>
   </div>
@@ -788,7 +788,7 @@
       currentSection === "prime" ? "#3981ff" : "#e8590c";
     sectionName.textContent = sectionNames[currentSection];
     sectionSwitchBtn.textContent =
-      currentSection === "prime" ? "コントラバス>" : "プライム<";
+      currentSection === "prime" ? "コントラバスへ移動" : "プライムへ移動";
     categoryGrid.innerHTML = "";
 
     categoryDefs.forEach(catDef => {
