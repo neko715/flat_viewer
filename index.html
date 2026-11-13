@@ -63,10 +63,32 @@
     gap: 12px;
   }
 
+  /* コントラバス表示中はテーマカラーを変えて、どちらのパートか一目で分かるようにする */
+  body[data-section="contrabass"] {
+    --accent: #e8590c;
+    --accent-soft: #fff1e8;
+  }
+
   .section-name {
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--text);
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: #fff;
+    background: var(--accent);
+    padding: 8px 18px;
+    border-radius: 999px;
+  }
+
+  .section-badge {
+    display: inline-block;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: #fff;
+    background: var(--accent);
+    padding: 5px 14px;
+    border-radius: 999px;
+    margin-bottom: 8px;
   }
 
   .section-switch-btn {
@@ -515,6 +537,7 @@
         </svg>
         分類に戻る
       </button>
+      <span class="section-badge" id="menu-section-badge">プライム</span>
       <h1 id="menu-title">♪ 楽譜ライブラリ</h1>
       <p>曲を選んでください</p>
     </div>
@@ -743,6 +766,7 @@
   const categoryGrid = document.getElementById("category-grid");
   const sectionName = document.getElementById("section-name");
   const sectionSwitchBtn = document.getElementById("section-switch-btn");
+  const menuSectionBadge = document.getElementById("menu-section-badge");
   const menuGrid = document.getElementById("menu-grid");
   const menuScreen = document.getElementById("menu-screen");
   const menuTitle = document.getElementById("menu-title");
@@ -759,6 +783,9 @@
 
   // カテゴリ一覧を生成（現在のパート用）
   function renderCategories() {
+    document.body.dataset.section = currentSection;
+    document.querySelector('meta[name="theme-color"]').content =
+      currentSection === "prime" ? "#3981ff" : "#e8590c";
     sectionName.textContent = sectionNames[currentSection];
     sectionSwitchBtn.textContent =
       currentSection === "prime" ? "コントラバス>" : "プライム<";
@@ -791,6 +818,7 @@
   renderCategories();
 
   function openCategory(cat) {
+    menuSectionBadge.textContent = sectionNames[currentSection];
     menuTitle.textContent = `♪ ${cat.title}（${sectionNames[currentSection]}）`;
     menuGrid.innerHTML = "";
 
@@ -829,7 +857,7 @@
 
   function openScore(song) {
     currentSong = song;
-    scoreTitle.textContent = song.title;
+    scoreTitle.textContent = `${song.title}（${sectionNames[currentSection]}）`;
     scoreBody.innerHTML = "";
     scoreBody.classList.toggle("single", song.parts.length === 1);
 
