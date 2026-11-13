@@ -52,6 +52,52 @@
     overflow-y: auto;
   }
 
+  .section-switch {
+    max-width: 700px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 4px 32px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .section-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .section-switch-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-soft);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 13px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  }
+
+  .section-switch-btn:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .empty-note {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--text-sub);
+    font-size: 14px;
+    padding: 32px 0;
+  }
+
   .category-grid {
     flex: 1;
     display: flex;
@@ -453,6 +499,10 @@
       <p>分類を選んでください</p>
       <p class="service-desc">ギター部で利用する楽譜を整理・検索・共有するためのサービスです。</p>
     </div>
+    <div class="section-switch">
+      <span class="section-name" id="section-name">プライム</span>
+      <button class="section-switch-btn" id="section-switch-btn">コントラバス&gt;</button>
+    </div>
     <div class="category-grid" id="category-grid"></div>
   </div>
 
@@ -645,14 +695,26 @@
     }
   ];
 
+  // パート（セクション）定義
+  // 既存の楽譜はすべてプライム。コントラバスの楽譜は、曲データに
+  // section: "contrabass" を付けて追加する（現在はまだ未登録）。
+  const sectionNames = { prime: "プライム", contrabass: "コントラバス" };
+  let currentSection = "prime";
+
+  function songsInSection(section) {
+    return songs.filter(s => (s.section || "prime") === section);
+  }
+
   // カテゴリ定義
-  const categories = [
-    { id: "required", title: "課題曲", sub: `${songs.filter(s => s.category === "required").length}曲` },
-    { id: "concert", title: "定期演奏会", sub: `${songs.filter(s => s.category === "concert").length}曲` }
+  const categoryDefs = [
+    { id: "required", title: "課題曲" },
+    { id: "concert", title: "定期演奏会" }
   ];
 
   const categoryScreen = document.getElementById("category-screen");
   const categoryGrid = document.getElementById("category-grid");
+  const sectionName = document.getElementById("section-name");
+  const sectionSwitchBtn = document.getElementById("section-switch-btn");
   const menuGrid = document.getElementById("menu-grid");
   const menuScreen = document.getElementById("menu-screen");
   const menuTitle = document.getElementById("menu-title");
@@ -667,26 +729,54 @@
   // 現在表示中の曲（印刷対象のPDFを特定するために使用）
   let currentSong = null;
 
-  // カテゴリ一覧を生成
-  categories.forEach(cat => {
-    const card = document.createElement("button");
-    card.className = "category-card";
-    card.innerHTML = `
-      <span>
-        ${cat.title}
-        <span class="sub">${cat.sub}</span>
-      </span>
-      <span class="icon">♪</span>
-    `;
-    card.addEventListener("click", () => openCategory(cat));
-    categoryGrid.appendChild(card);
+  // カテゴリ一覧を生成（現在のパート用）
+  function renderCategories() {
+    sectionName.textContent = sectionNames[currentSection];
+    sectionSwitchBtn.textContent =
+      currentSection === "prime" ? "コントラバス>" : "プライム<";
+    categoryGrid.innerHTML = "";
+
+    categoryDefs.forEach(catDef => {
+      const count = songsInSection(currentSection)
+        .filter(s => s.category === catDef.id).length;
+      const cat = { ...catDef, sub: `${count}曲` };
+      const card = document.createElement("button");
+      card.className = "category-card";
+      card.innerHTML = `
+        <span>
+          ${cat.title}
+          <span class="sub">${cat.sub}</span>
+        </span>
+        <span class="icon">♪</span>
+      `;
+      card.addEventListener("click", () => openCategory(cat));
+      categoryGrid.appendChild(card);
+    });
+  }
+
+  // パート切り替え（プライム ⇔ コントラバス）
+  sectionSwitchBtn.addEventListener("click", () => {
+    currentSection = currentSection === "prime" ? "contrabass" : "prime";
+    renderCategories();
   });
 
+  renderCategories();
+
   function openCategory(cat) {
-    menuTitle.textContent = `♪ ${cat.title}`;
+    menuTitle.textContent = `♪ ${cat.title}（${sectionNames[currentSection]}）`;
     menuGrid.innerHTML = "";
 
-    songs.filter(s => s.category === cat.id).forEach(song => {
+    const songsInCategory = songsInSection(currentSection)
+      .filter(s => s.category === cat.id);
+
+    if (songsInCategory.length === 0) {
+      const note = document.createElement("div");
+      note.className = "empty-note";
+      note.textContent = "まだ楽譜が登録されていません";
+      menuGrid.appendChild(note);
+    }
+
+    songsInCategory.forEach(song => {
       const card = document.createElement("button");
       card.className = "song-card";
       card.innerHTML = `
