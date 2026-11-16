@@ -1115,15 +1115,8 @@ ${imagesHtml}
       ]);
 
       if (ownHtml !== latestHtml) {
-        // モーダル表示
-        const modal = document.getElementById("reloadModal");
-        modal.style.display = "flex";
-
-        // OKボタンが押されたら本番URLへ移動する（常に最新版が開く）
-        document.getElementById("reloadOkBtn").onclick = () => {
-          modal.style.display = "none";
-          location.href = PRODUCTION_URL;
-        };
+        // 通知は出さず、そのまま本番URLへ移動する（常に最新版が開く）
+        location.href = PRODUCTION_URL;
       }
       // 一致している場合は何もしない
     } catch (err) {
@@ -1141,28 +1134,5 @@ ${imagesHtml}
     }
   });
 </script>
-
-<!-- 更新通知モーダル -->
-<div id="reloadModal" style="
-  display:none;
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,0.5);
-  justify-content:center;
-  align-items:center;
-  z-index:9999;
-">
-  <div style="
-    background:#fff;
-    padding:20px;
-    border-radius:10px;
-    text-align:center;
-    min-width:300px;
-    box-shadow:0 4px 12px rgba(0,0,0,.3);
-  ">
-    <p>楽譜が編集されたため、ページを更新します。</p>
-    <button id="reloadOkBtn">OK</button>
-  </div>
-</div>
 </body>
 </html>
