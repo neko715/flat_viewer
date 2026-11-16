@@ -1104,9 +1104,17 @@ ${imagesHtml}
     return res.text();
   }
 
+  // 最新版が確認できたら、右上の緑バッジを表示する
+  function showLatestBadge() {
+    document.getElementById("latestBadge").style.display = "block";
+  }
+
   async function checkForUpdate() {
-    // 本番URLで開いている場合は常に最新が配信されるので、チェックは不要
-    if (location.hostname === "flat-view.pages.dev") return;
+    // 本番URLで開いている場合は常に最新が配信されるので、バッジだけ出して終わる
+    if (location.hostname === "flat-view.pages.dev") {
+      showLatestBadge();
+      return;
+    }
 
     try {
       const [ownHtml, latestHtml] = await Promise.all([
@@ -1117,8 +1125,10 @@ ${imagesHtml}
       if (ownHtml !== latestHtml) {
         // 通知は出さず、そのまま本番URLへ移動する（常に最新版が開く）
         location.href = PRODUCTION_URL;
+      } else {
+        // 一致している場合は最新版が確認できたのでバッジを表示する
+        showLatestBadge();
       }
-      // 一致している場合は何もしない
     } catch (err) {
       // 取得に失敗した場合は何もせず、次のチェックで再試行する
       console.error("最新版チェック中にエラーが発生しました:", err);
@@ -1134,5 +1144,21 @@ ${imagesHtml}
     }
   });
 </script>
+
+<!-- 最新版バッジ（最新版が確認できたときだけ右上に表示される） -->
+<div id="latestBadge" style="
+  display:none;
+  position:fixed;
+  top:10px;
+  right:10px;
+  width:12px;
+  height:12px;
+  border-radius:50%;
+  background:#2fbf71;
+  border:2px solid #fff;
+  box-shadow:0 1px 4px rgba(0,0,0,.35);
+  z-index:10000;
+  pointer-events:none;
+" title="最新版です"></div>
 </body>
 </html>
