@@ -1075,80 +1075,71 @@ ${imagesHtml}
 
   printBtn.addEventListener("click", printScore);
 
-  // ---------- Googleスプレッドシート監視によるページ遷移 ----------
-  // スプレッドシートID（共有URLから取得）
-  const SHEET_ID = "1tKJEYZJyCj7KOtDzKs_DR2VRbQHqFXFklH0Ksv7G9Q8";
-  // 監視間隔（ミリ秒）
-  const SHEET_WATCH_INTERVAL_MS = 5000;
+  // ---------- 最新版チェック（GitHub上の最新index.htmlとの比較） ----------
+  // 本番URL（常に最新のデプロイが配信される）
+  const PRODUCTION_URL = "https://flat-view.pages.dev/";
+  // 最新版の取得先（GitHubのmainブランチにあるindex.htmlそのもの）
+  const LATEST_INDEX_URL =
+    "https://raw.githubusercontent.com/neko715/flat_viewer/main/index.html";
+  // チェック間隔（ミリ秒）
+  const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
-  // 移行先URLとして許可するドメイン
-  const ALLOWED_REDIRECT_HOST = "flat-view.pages.dev";
-
-  // gvizエンドポイントを使い、A1セルのみをCSVとして取得する
-  // ※このスプレッドシートは「リンクを知っている全員が閲覧可」に共有されている必要があります
-  async function fetchSheetA1Value() {
-    const url =
-      `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq` +
-      `?tqx=out:csv&range=A1&_=${Date.now()}`; // キャッシュ回避用のダミーパラメータ
-
+  // 自分が配信されているindex.htmlを取得する
+  async function fetchOwnIndexHtml() {
+    const url = new URL("./index.html", location.href);
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) {
-      throw new Error(`スプレッドシートの取得に失敗しました (status: ${res.status})`);
+      throw new Error(`自分のindex.htmlの取得に失敗しました (status: ${res.status})`);
     }
-
-    const csvText = await res.text();
-    // gvizのCSV出力は "値" のようにダブルクォートで囲まれて返る
-    return csvText
-      .trim()
-      .replace(/^"|"$/g, "")
-      .replace(/""/g, '"');
+    return res.text();
   }
 
-  // 比較用にURLを正規化する（末尾スラッシュなどの表記ゆれを吸収）
-  function normalizeUrl(u) {
-    try {
-      return new URL(u).href;
-    } catch {
-      return u;
+  // GitHub上の最新index.htmlを取得する
+  // ※raw.githubusercontent.comのキャッシュにより、反映が最大で数分遅れることがある
+  async function fetchLatestIndexHtml() {
+    const res = await fetch(LATEST_INDEX_URL, { cache: "no-store" });
+    if (!res.ok) {
+      throw new Error(`最新のindex.htmlの取得に失敗しました (status: ${res.status})`);
     }
+    return res.text();
   }
 
-  async function checkSheetForUpdate() {
+  async function checkForUpdate() {
+    // 本番URLで開いている場合は常に最新が配信されるので、チェックは不要
+    if (location.hostname === "flat-view.pages.dev") return;
+
     try {
-      const latestUrl = await fetchSheetA1Value();
-      if (!latestUrl) return;
+      const [ownHtml, latestHtml] = await Promise.all([
+        fetchOwnIndexHtml(),
+        fetchLatestIndexHtml(),
+      ]);
 
-      const normalizedLatest = normalizeUrl(latestUrl);
-      const normalizedCurrent = normalizeUrl(location.href);
-
-      if (normalizedLatest !== normalizedCurrent) {
-        // 移行先URLが許可されたドメイン（flat-view.pages.dev）を含むかチェック
-        if (!normalizedLatest.includes(ALLOWED_REDIRECT_HOST)) {
-          alert("不明な移行先が認識されました。開発者へ連絡してください。");
-          return;
-        }
-
+      if (ownHtml !== latestHtml) {
         // モーダル表示
         const modal = document.getElementById("reloadModal");
         modal.style.display = "flex";
 
-        // OKボタンが押されたら、そのURLへ現在のページを差し替える（新規タブは開かない）
+        // OKボタンが押されたら本番URLへ移動する（常に最新版が開く）
         document.getElementById("reloadOkBtn").onclick = () => {
           modal.style.display = "none";
-          location.href = latestUrl;
+          location.href = PRODUCTION_URL;
         };
       }
       // 一致している場合は何もしない
     } catch (err) {
-      console.error("スプレッドシートの監視中にエラーが発生しました:", err);
-      // ↓デバッグ用：原因が分かったら削除してOK
-      alert("スプレッドシート監視エラー: " + err.message);
+      // 取得に失敗した場合は何もせず、次のチェックで再試行する
+      console.error("最新版チェック中にエラーが発生しました:", err);
     }
   }
 
-  // 初回実行 + 5秒ごとのポーリング
-  checkSheetForUpdate();
-  setInterval(checkSheetForUpdate, SHEET_WATCH_INTERVAL_MS);
+  // 初回実行 + 定期チェック + 画面に戻ってきたときにもチェック
+  checkForUpdate();
+  setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL_MS);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      checkForUpdate();
+    }
+  });
 </script>
 
 <!-- 更新通知モーダル -->
