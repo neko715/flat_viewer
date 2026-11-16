@@ -36,7 +36,8 @@
   }
 
   #app {
-    height: 100vh;
+    height: 100vh; /* フォールバック */
+    height: 100dvh; /* 実際に見えている高さに合わせる（タブレットモード等で下端が画面外に切れるのを防ぐ） */
     width: 100vw;
     overflow: hidden;
     display: flex;
