@@ -1109,26 +1109,38 @@ ${imagesHtml}
     document.getElementById("latestBadge").style.display = "block";
   }
 
-  async function checkForUpdate() {
-    // 本番URLで開いている場合は常に最新が配信されるので、バッジだけ出して終わる
-    if (location.hostname === "flat-view.pages.dev") {
-      showLatestBadge();
-      return;
-    }
+  // 読み込んだ時点で配信されていた自分のindex.html
+  // （開きっぱなしのタブが古くなったかどうかを判定するために保持する）
+  let loadedOwnHtml = null;
 
+  async function checkForUpdate() {
     try {
       const [ownHtml, latestHtml] = await Promise.all([
         fetchOwnIndexHtml(),
         fetchLatestIndexHtml(),
       ]);
 
-      if (ownHtml !== latestHtml) {
-        // 通知は出さず、そのまま本番URLへ移動する（常に最新版が開く）
+      if (loadedOwnHtml === null) {
+        // 初回チェック: 読み込んだ時点の版を記録する
+        loadedOwnHtml = ownHtml;
+      } else if (ownHtml !== loadedOwnHtml) {
+        // 読み込んだ後に新しいデプロイが配信され始めた（タブが古くなった）
+        // 通知は出さず、そのまま本番URLへ移動して最新版を読み直す
         location.href = PRODUCTION_URL;
-      } else {
-        // 一致している場合は最新版が確認できたのでバッジを表示する
-        showLatestBadge();
+        return;
       }
+
+      if (ownHtml !== latestHtml) {
+        if (location.hostname !== "flat-view.pages.dev") {
+          // デプロイURLで開いていて古い場合は、本番URLへ移動する
+          location.href = PRODUCTION_URL;
+        }
+        // 本番URLで開いている場合はデプロイの反映待ちなので何もしない
+        return;
+      }
+
+      // 最新版が確認できたのでバッジを表示する
+      showLatestBadge();
     } catch (err) {
       // 取得に失敗した場合は何もせず、次のチェックで再試行する
       console.error("最新版チェック中にエラーが発生しました:", err);
